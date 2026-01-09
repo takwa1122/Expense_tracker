@@ -1,15 +1,7 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
 from datetime import date
-from telegram import Bot
 import plotly.express as px
-# ====== Telegram setup ======
-TELEGRAM_TOKEN = ""
-CHAT_ID = ""
-bot = Bot(TELEGRAM_TOKEN)
-#bot.send_message(chat_id=CHAT_ID, text="Bonjour Takwa 👋 Ton bot fonctionne !")
 
 # ====== Animated background CSS ======
 st.markdown(
@@ -135,14 +127,3 @@ if not df_month.empty:
         font=dict(color='white')
     )
     st.plotly_chart(fig_line, use_container_width=True)
-
-# ====== Telegram Monthly Summary ======
-if today.day == pd.Timestamp(today).days_in_month:
-    message = f"💰 Your expenses for {today.strftime('%B %Y')}:\nTotal: {total_month}\n\n"
-    for _, row in df_month.iterrows():
-        message += f"{row['Date'].strftime('%d-%m')} - {row['Category']}: {row['Amount']} ({row['Note']})\n"
-    try:
-        bot.send_message(chat_id=CHAT_ID, text=message)
-        st.success("Telegram summary sent!")
-    except Exception as e:
-        st.error(f"Failed to send Telegram message: {e}")
