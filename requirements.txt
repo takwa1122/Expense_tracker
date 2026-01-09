@@ -1,0 +1,6 @@
+streamlit
+pandas
+plotly
+python-telegram-bot
+matplotlib
+seaborn
