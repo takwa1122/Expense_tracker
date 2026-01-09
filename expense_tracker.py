@@ -6,8 +6,8 @@ from datetime import date
 from telegram import Bot
 import plotly.express as px
 # ====== Telegram setup ======
-TELEGRAM_TOKEN = "8496637107:AAFZZhrWNlcrvZWlUP_zMiCSqlC4vBlHxIA"
-CHAT_ID = "8477966551"
+TELEGRAM_TOKEN = ""
+CHAT_ID = ""
 bot = Bot(TELEGRAM_TOKEN)
 #bot.send_message(chat_id=CHAT_ID, text="Bonjour Takwa 👋 Ton bot fonctionne !")
 
