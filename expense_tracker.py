@@ -7,7 +7,6 @@ import plotly.express as px
 st.markdown(
     """
     <style>
-    /* Animated gradient background */
     @keyframes gradientBG {
         0% {background-position: 0% 50%;}
         50% {background-position: 100% 50%;}
@@ -33,16 +32,14 @@ except FileNotFoundError:
 today = date.today()
 current_month = today.month
 current_year = today.year
-df["Date"] = pd.to_datetime(df["Date"])
+
+df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+df = df.dropna(subset=["Date"])
+
 df_month = df[
     (df["Date"].dt.month == current_month) &
     (df["Date"].dt.year == current_year)
 ]
-
-# ====== Reset for new month ======
-if df_month.empty and not df.empty and df["Date"].dt.month.max() < current_month:
-    df = pd.DataFrame(columns=df.columns)
-    df.to_csv("expenses.csv", index=False)
 
 # ====== Title ======
 st.markdown(
@@ -58,33 +55,35 @@ with st.form("expense_form"):
     amt = st.number_input("Amount", min_value=0.0, step=1.0)
     note = st.text_input("Note")
     submitted = st.form_submit_button("Add Expense")
+
     if submitted:
         new = pd.DataFrame([[d, cat, amt, note]], columns=df.columns)
         df = pd.concat([df, new], ignore_index=True)
         df.to_csv("expenses.csv", index=False)
         st.success(f"✅ Expense added: {cat} {amt} ({note})")
 
-# ====== Monthly Summary Card ======
+# ====== Monthly Summary ======
 total_month = df_month["Amount"].sum()
 st.markdown(
     f"""
-    <div style="background-color:rgba(255,255,255,0.6);padding:15px;border-radius:10px;text-align:center;">
+    <div style="background-color:rgba(255,255,255,0.6);
+                padding:15px;border-radius:10px;text-align:center;">
         <h2 style="color:#4B0082;">Total Spent This Month</h2>
         <h1 style="color:#FF4500;">${total_month:.2f}</h1>
     </div>
-    """, unsafe_allow_html=True
+    """,
+    unsafe_allow_html=True
 )
 
-# ====== Show Monthly Table ======
+# ====== Table ======
 st.subheader(f"Expenses for {today.strftime('%B %Y')}")
 if not df_month.empty:
     st.dataframe(df_month.style.format({"Amount": "${:.2f}"}), height=250)
 else:
     st.info("No expenses recorded this month yet.")
 
-# ====== Interactive Graphs with Plotly ======
+# ====== Interactive Graphs ======
 if not df_month.empty:
-    # ----- Bar Chart: Spending by Category -----
     st.subheader("Spending by Category")
     fig_bar = px.bar(
         df_month,
@@ -98,15 +97,10 @@ if not df_month.empty:
     fig_bar.update_layout(
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
-        title_font=dict(size=22, color='white'),
-        xaxis_title_font=dict(size=16, color='white'),
-        yaxis_title_font=dict(size=16, color='white'),
-        legend_title_font=dict(size=14, color='white'),
         font=dict(color='white')
     )
     st.plotly_chart(fig_bar, use_container_width=True)
 
-    # ----- Line Chart: Spending Over Time -----
     st.subheader("Spending Over Time")
     df_time = df_month.groupby("Date")["Amount"].sum().reset_index()
     fig_line = px.line(
@@ -117,13 +111,9 @@ if not df_month.empty:
         title="Daily Spending",
         color_discrete_sequence=["#FF4500"]
     )
-    fig_line.update_traces(marker=dict(size=10))
     fig_line.update_layout(
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
-        title_font=dict(size=22, color='white'),
-        xaxis_title_font=dict(size=16, color='white'),
-        yaxis_title_font=dict(size=16, color='white'),
         font=dict(color='white')
     )
     st.plotly_chart(fig_line, use_container_width=True)
