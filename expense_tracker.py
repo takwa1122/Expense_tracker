@@ -26,19 +26,18 @@ st.markdown(
         background-size: 400% 400%;
         animation: gradientBG 15s ease infinite;
     }
-    /* Mobile-friendly spacing and readability */
-    .main .block-container {
-        padding-top: 2rem;
-        padding-bottom: 5rem;
-    }
+    /* Mobile formatting */
     h1, h2, h3 { text-align: center; color: #333 !important; }
-    
-    /* Card style for the form and metrics */
-    .css-1r6slb0, .stForm {
-        background-color: rgba(255, 255, 255, 0.4);
+    .stForm {
+        background-color: rgba(255, 255, 255, 0.5);
         padding: 20px;
         border-radius: 15px;
-        border: 1px solid rgba(255, 255, 255, 0.6);
+        border: 1px solid rgba(255,255,255,0.7);
+    }
+    /* Make buttons larger for thumbs */
+    .stButton button {
+        height: 3em;
+        font-weight: bold;
     }
     </style>
     """,
@@ -49,28 +48,43 @@ st.markdown(
 # DATA HANDLING
 # =========================
 def load_data():
+    columns = ["Date", "Category", "Amount", "Note"]
     if os.path.exists(FILE):
-        df = pd.read_csv(FILE)
-        df["Date"] = pd.to_datetime(df["Date"])
+        try:
+            temp_df = pd.read_csv(FILE)
+            if temp_df.empty:
+                return pd.DataFrame(columns=columns)
+            temp_df["Date"] = pd.to_datetime(temp_df["Date"])
+            return temp_df
+        except Exception:
+            # If file is corrupted or unreadable, return empty structure
+            return pd.DataFrame(columns=columns)
     else:
-        df = pd.DataFrame(columns=["Date", "Category", "Amount", "Note"])
-    return df
+        # Create the file if it doesn't exist
+        empty_df = pd.DataFrame(columns=columns)
+        empty_df.to_csv(FILE, index=False)
+        return empty_df
 
 df = load_data()
 
 # Filter for current month
 today = date.today()
-df_month = df[
-    (df["Date"].dt.month == today.month) & 
-    (df["Date"].dt.year == today.year)
-].copy()
+if not df.empty:
+    # Convert series to datetime just in case of format mismatches
+    df["Date"] = pd.to_datetime(df["Date"])
+    df_month = df[
+        (df["Date"].dt.month == today.month) & 
+        (df["Date"].dt.year == today.year)
+    ].copy()
+else:
+    df_month = pd.DataFrame(columns=["Date", "Category", "Amount", "Note"])
 
 # =========================
 # HEADER & TOTAL
 # =========================
 st.markdown("<h1>💰 My Expenses</h1>", unsafe_allow_html=True)
 
-total = df_month["Amount"].sum()
+total = df_month["Amount"].sum() if not df_month.empty else 0.0
 st.markdown(
     f"""
     <div style="background-color:rgba(255,255,255,0.7); padding:15px; border-radius:15px; text-align:center; margin-bottom: 20px;">
@@ -84,8 +98,7 @@ st.markdown(
 # =========================
 # ADD EXPENSE (CENTERED)
 # =========================
-# Using columns to center the form on larger screens; it will stack on mobile.
-col1, col2, col3 = st.columns([1, 6, 1])
+col1, col2, col3 = st.columns([1, 8, 1])
 
 with col2:
     st.markdown("### ➕ Add New")
@@ -97,37 +110,56 @@ with col2:
         submit = st.form_submit_button("Save Expense", use_container_width=True)
 
     if submit:
-        new_row = pd.DataFrame([[pd.to_datetime(d), cat, amt, note]], columns=df.columns)
+        # Create new entry with correct format
+        new_row = pd.DataFrame({
+            "Date": [pd.to_datetime(d)],
+            "Category": [cat],
+            "Amount": [amt],
+            "Note": [note]
+        })
+        # Concatenate and save
         df = pd.concat([df, new_row], ignore_index=True)
         df.to_csv(FILE, index=False)
-        st.success("Saved!")
+        st.success("Expense Saved!")
         st.rerun()
 
 # =========================
-# ANALYTICS
+# ANALYTICS & RECENT LIST
 # =========================
 st.markdown("---")
 if not df_month.empty:
+    # 1. VISUALIZATION
     st.subheader("📊 Category View")
     fig_pie = px.pie(df_month, values='Amount', names='Category', hole=0.4)
-    fig_pie.update_layout(margin=dict(l=20, r=20, t=20, b=20), height=300)
+    fig_pie.update_layout(
+        margin=dict(l=20, r=20, t=20, b=20), 
+        height=300,
+        paper_bgcolor="rgba(0,0,0,0)"
+    )
     st.plotly_chart(fig_pie, use_container_width=True)
 
+    # 2. DATA TABLE
     st.subheader("📋 Recent Items")
-    # Show the last 5 items added first for quick mobile check
-    df_recent = df_month.sort_values(by="Date", ascending=False).head(10)
-    st.dataframe(df_recent[["Date", "Category", "Amount"]], use_container_width=True)
+    df_recent = df_month.sort_values(by="Date", ascending=False)
+    # Clean up date for display
+    df_recent["Date"] = df_recent["Date"].dt.strftime('%Y-%m-%d')
+    st.dataframe(
+        df_recent[["Date", "Category", "Amount", "Note"]], 
+        use_container_width=True, 
+        hide_index=True
+    )
 
-    # DELETE SECTION
+    # 3. DELETE OPTION
     with st.expander("🗑️ Delete an entry"):
         to_delete = st.selectbox(
-            "Select to remove:",
+            "Choose item to remove:",
             options=df_month.index,
             format_func=lambda x: f"{df_month.loc[x, 'Date'].date()} | {df_month.loc[x, 'Category']} | ${df_month.loc[x, 'Amount']}"
         )
         if st.button("Confirm Delete", use_container_width=True):
+            # Drop from main df and save
             df = df.drop(to_delete)
             df.to_csv(FILE, index=False)
             st.rerun()
 else:
-    st.info("No expenses found for this month.")
+    st.info("Your list is currently empty. Use the form above to add your first expense!")
