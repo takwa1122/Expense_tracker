@@ -8,11 +8,10 @@ import os
 # CONFIG
 # =========================
 FILE = "expenses.csv"
-
 st.set_page_config(page_title="Expense Tracker", layout="wide")
 
 # =========================
-# BACKGROUND
+# BACKGROUND (CSS)
 # =========================
 st.markdown(
     """
@@ -23,10 +22,13 @@ st.markdown(
         100% {background-position: 0% 50%;}
     }
     .stApp {
-        background: linear-gradient(-45deg, #ff9a9e, #fad0c4, #a1c4fd, #c2e9fb);
+        background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
         background-size: 400% 400%;
         animation: gradientBG 15s ease infinite;
     }
+    /* Make text more readable on colors */
+    h1, h2, h3, p, label { color: white !important; }
+    .stDataFrame { background-color: rgba(255,255,255,0.1); border-radius: 10px; }
     </style>
     """,
     unsafe_allow_html=True
@@ -35,137 +37,103 @@ st.markdown(
 # =========================
 # LOAD DATA
 # =========================
-if os.path.exists(FILE):
-    df = pd.read_csv(FILE)
-else:
-    df = pd.DataFrame(columns=["Date", "Category", "Amount", "Note"])
-    df.to_csv(FILE, index=False)
+def load_data():
+    if os.path.exists(FILE):
+        df = pd.read_csv(FILE)
+        df["Date"] = pd.to_datetime(df["Date"]) # Ensure datetime type
+    else:
+        df = pd.DataFrame(columns=["Date", "Category", "Amount", "Note"])
+    return df
 
-# FIX DATE
-df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-df = df.dropna(subset=["Date"])
+df = load_data()
 
 # =========================
-# CURRENT MONTH
+# CURRENT MONTH FILTER
 # =========================
 today = date.today()
+# Filter for current month using a copy to avoid SettingWithCopy warnings
 df_month = df[
-    (df["Date"].dt.month == today.month) &
+    (df["Date"].dt.month == today.month) & 
     (df["Date"].dt.year == today.year)
-]
+].copy()
 
 # =========================
 # TITLE
 # =========================
-st.markdown(
-    "<h1 style='text-align:center;color:white;'>💰 Monthly Expense Tracker</h1>",
-    unsafe_allow_html=True
-)
+st.markdown("<h1 style='text-align:center;'>💰 Monthly Expense Tracker</h1>", unsafe_allow_html=True)
 
 # =========================
 # ADD EXPENSE
 # =========================
-st.subheader("➕ Add Expense")
-
-with st.form("expense_form"):
-    d = st.date_input("Date", today)
-    cat = st.selectbox("Category", ["Food", "Transport", "Rent", "Shopping", "Utility", "Other"])
-    amt = st.number_input("Amount", min_value=0.0, step=1.0)
-    note = st.text_input("Note")
-
-    submit = st.form_submit_button("Add")
+with st.sidebar:
+    st.header("➕ Add Expense")
+    with st.form("expense_form", clear_on_submit=True):
+        d = st.date_input("Date", today)
+        cat = st.selectbox("Category", ["Food", "Transport", "Rent", "Shopping", "Utility", "Other"])
+        amt = st.number_input("Amount", min_value=0.0, step=1.0)
+        note = st.text_input("Note")
+        submit = st.form_submit_button("Add Expense")
 
     if submit:
-        new = pd.DataFrame(
-            [[d.strftime("%Y-%m-%d"), cat, amt, note]],
-            columns=df.columns
-        )
-        df = pd.concat([df, new], ignore_index=True)
+        new_row = pd.DataFrame([[pd.to_datetime(d), cat, amt, note]], columns=df.columns)
+        df = pd.concat([df, new_row], ignore_index=True)
         df.to_csv(FILE, index=False)
-        st.success("✅ Expense added")
+        st.success("Expense added!")
         st.rerun()
 
 # =========================
-# TOTAL
+# METRICS
 # =========================
 total = df_month["Amount"].sum()
-
 st.markdown(
     f"""
-    <div style="background-color:rgba(255,255,255,0.6);
-                padding:20px;border-radius:15px;text-align:center;">
-        <h2>Total this month</h2>
-        <h1 style="color:#FF4500;">{total:.2f}</h1>
+    <div style="background-color:rgba(255,255,255,0.2); padding:20px; border-radius:15px; text-align:center; border: 1px solid white;">
+        <h2 style="margin:0;">Total this month</h2>
+        <h1 style="color:#FFFFFF; font-size: 50px;">${total:,.2f}</h1>
     </div>
     """,
     unsafe_allow_html=True
 )
 
 # =========================
-# TABLE + DELETE
+# DISPLAY & DELETE
 # =========================
-st.subheader("📋 Expenses")
+st.subheader("📋 Monthly Breakdown")
 
-if df_month.empty:
-    st.info("No expenses yet.")
-else:
-    df_display = df_month.reset_index(drop=True)
-
-    selected = st.selectbox(
-        "🗑️ Select an expense to delete",
-        df_display.index,
-        format_func=lambda i: f"{df_display.loc[i,'Date'].date()} | "
-                               f"{df_display.loc[i,'Category']} | "
-                               f"${df_display.loc[i,'Amount']} | "
-                               f"{df_display.loc[i,'Note']}"
+if not df_month.empty:
+    # We display df_month but use the original index to delete from 'df'
+    df_display = df_month.copy()
+    df_display["Display_Date"] = df_display["Date"].dt.date
+    
+    # Select box to choose which row to delete
+    to_delete = st.selectbox(
+        "Select an expense to delete",
+        options=df_month.index,
+        format_func=lambda x: f"{df_month.loc[x, 'Date'].date()} - {df_month.loc[x, 'Category']}: ${df_month.loc[x, 'Amount']}"
     )
-
-    if st.button("Delete selected expense"):
-        idx_to_delete = df_display.loc[selected].name
-        df = df.drop(df_month.iloc[selected].name)
+    
+    if st.button("🗑️ Delete Selected"):
+        df = df.drop(to_delete)
         df.to_csv(FILE, index=False)
-        st.warning("❌ Expense deleted")
         st.rerun()
 
-    st.dataframe(
-        df_display.style.format({"Amount": "${:.2f}"}),
-        height=250
-    )
+    st.dataframe(df_month, use_container_width=True)
+else:
+    st.info("No expenses recorded for this month yet.")
 
 # =========================
 # GRAPHS
 # =========================
 if not df_month.empty:
-    st.subheader("📊 Spending by Category")
+    col1, col2 = st.columns(2)
 
-    fig_bar = px.bar(
-        df_month,
-        x="Category",
-        y="Amount",
-        color="Category",
-        title="Spending by Category",
-        color_discrete_sequence=px.colors.qualitative.Set2
-    )
-    fig_bar.update_layout(
-        plot_bgcolor="rgba(0,0,0,0)",
-        paper_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="white")
-    )
-    st.plotly_chart(fig_bar, use_container_width=True)
+    with col1:
+        fig_bar = px.pie(df_month, values='Amount', names='Category', title="Expenses by Category")
+        fig_bar.update_layout(paper_bgcolor="rgba(0,0,0,0)", font=dict(color="white"))
+        st.plotly_chart(fig_bar, use_container_width=True)
 
-    st.subheader("📈 Daily Spending")
-
-    df_time = df_month.groupby("Date")["Amount"].sum().reset_index()
-    fig_line = px.line(
-        df_time,
-        x="Date",
-        y="Amount",
-        markers=True,
-        color_discrete_sequence=["#FF4500"]
-    )
-    fig_line.update_layout(
-        plot_bgcolor="rgba(0,0,0,0)",
-        paper_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="white")
-    )
-    st.plotly_chart(fig_line, use_container_width=True)
+    with col2:
+        df_daily = df_month.groupby("Date")["Amount"].sum().reset_index()
+        fig_line = px.line(df_daily, x="Date", y="Amount", title="Daily Spending Trend")
+        fig_line.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="white"))
+        st.plotly_chart(fig_line, use_container_width=True)
