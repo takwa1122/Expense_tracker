@@ -95,7 +95,7 @@ st.markdown(
     <div style="background-color:rgba(255,255,255,0.6);
                 padding:20px;border-radius:15px;text-align:center;">
         <h2>Total this month</h2>
-        <h1 style="color:#FF4500;">${total:.2f}</h1>
+        <h1 style="color:#FF4500;">{total:.2f}</h1>
     </div>
     """,
     unsafe_allow_html=True
